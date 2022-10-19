@@ -1,0 +1,170 @@
+----QmanControlPlanLine
+
+USE [IFSDEV-ManualUpload]
+
+TRUNCATE TABLE [QmanControlPlanLine]
+GO
+
+--****** Script for SelectTopNRows command from SSMS *
+INSERT INTO [dbo].[QmanControlPlanLine]
+		([CONTROL_PLAN_NO]
+		,[CTRL_PLAN_REVISION_NO]
+		,[DATA_POINT]
+		,[NORM_TYPE]
+		,[TEST_OPERATION_NO]
+		,[TEST_OPERATION_DESCRIPTION]
+		,[ROUTING_OPERATION_NO]
+		,[ENG_DRAWING_REF]
+		,[WORK_CENTER_NO]
+		,[MACHINE_PROCESS_TOOL]
+		,[PRODUCT_CHARACTER]
+		,[PROCESS_CHARACTER]
+		,[SPECIAL_CHAR_CLASS]
+		,[EVAL_MEAS_TECH]
+		,[DATA_TYPE_DB]
+		,[REACTION_PLAN]
+		,[SPC_DB]
+		,[CAPABILITY_INDICES_DB]
+		,[INNER_CP]
+		,[INNER_CPK]
+		,[OUTER_CP]
+		,[OUTER_CPK]
+		,[SAMPLE_FREQUENCY]
+		,[NOTE_TEXT]
+		,[ROWSTATE]
+		,[INSPECTION_CODE]
+		,[INSPECTION_CODE_DESC]
+		,[SAMPLE_PERCENT]
+		,[NORM_VALUE]
+		,[OUTER_MIN]
+		,[INNER_MIN]
+		,[OUTER_MAX]
+		,[INNER_MAX]
+		,[AIMBALANCE]
+		,[AIMDECIMAL]
+		,[AIMPRINT]
+		,[SPEC_ID])
+--Manufacturing
+SELECT 
+		qcp.[CONTROL_PLAN_NO]
+		,qcp.[CTRL_PLAN_REVISION_NO]
+		,'1' [DATA_POINT]
+		,'RATE' [NORM_TYPE]
+		,fum.[TEST_OPERATION_NO]
+		,fum.[INSPECTION_CODE_DESC] [TEST_OPERATION_DESCRIPTION]
+		,rot.OPERATION_NO [ROUTING_OPERATION_NO]
+		,'' [ENG_DRAWING_REF]
+		,rot.WORK_CENTER_NO
+		,'' [MACHINE_PROCESS_TOOL]
+		,'' [PRODUCT_CHARACTER]
+		,'' [PROCESS_CHARACTER]
+		,'' [SPECIAL_CHAR_CLASS]
+		,'' [EVAL_MEAS_TECH]
+		,'VARIABLE' [DATA_TYPE_DB]
+		,'' [REACTION_PLAN]
+		,'ALLOWED' [SPC_DB]
+		,'ALLOWED' [CAPABILITY_INDICES_DB]
+		,'0' [INNER_CP]
+		,'0' [INNER_CPK]
+		,'0' [OUTER_CP]
+		,'0' [OUTER_CPK]
+		,'' [SAMPLE_FREQUENCY]
+		,'' [NOTE_TEXT]
+		,'Active' [ROWSTATE]
+		,fum.[INSPECTION_CODE]
+		,fum.[INSPECTION_CODE_DESC]
+		,fum.[SAMPLE_PERCENT]
+		,fum.[NORM_VALUE]
+		,fum.[OUTER_MIN]
+		,fum.[INNER_MIN]
+		,fum.[OUTER_MAX]
+		,fum.[INNER_MAX]
+		,fum.[UDB_BALANCE]
+		,fum.[DECIMALS]
+		,fum.[PRINT]
+		,qcp.TIPO
+FROM QmanControlPlan qcp
+INNER JOIN [InventoryPartsSpecialty$] invent on invent.[PART_NO] = qcp.PART_NO AND invent.[CONTRACT] = qcp.[CONTRACT]
+INNER JOIN [dbo].[ControlPlanTemplate$] fum on fum.[SPEC_ID] = invent.[BS]
+INNER JOIN [RoutingOperation] rot on rot.PART_NO = qcp.PART_NO AND rot.CONTRACT = qcp.CONTRACT AND rot.ALTERNATIVE_NO = qcp.ROUTING_ALTERNATIVE_NO
+WHERE qcp.TIPO in ('*', 'O')
+
+
+
+---Update [ROUTING_OPERATION_NO] WHERE ROWTYPE <> 'QmanControlPlanManuf'
+UPDATE [dbo].[QmanControlPlanLine]
+SET [ROUTING_OPERATION_NO] = null
+FROM [QmanControlPlanLine] q1
+INNER JOIN [QmanControlPlan] q2 on q1.CONTROL_PLAN_NO = q2.CONTROL_PLAN_NO and q1.CTRL_PLAN_REVISION_NO = q2.CTRL_PLAN_REVISION_NO
+AND q2.ROWTYPE <> 'QmanControlPlanManuf'
+GO
+
+
+---Update [ROUTING_OPERATION_NO] WHERE ROWTYPE <> 'QmanControlPlanManuf'
+UPDATE [dbo].[QmanControlPlanLine]
+SET [ROUTING_OPERATION_NO] = null
+FROM [QmanControlPlanLine] q1
+INNER JOIN [QmanControlPlan] q2 on q1.CONTROL_PLAN_NO = q2.CONTROL_PLAN_NO and q1.CTRL_PLAN_REVISION_NO = q2.CTRL_PLAN_REVISION_NO
+AND q2.ROWTYPE <> 'QmanControlPlanManuf'
+GO
+
+--Update DataPoint & TEST_OPERATION_NO
+/***********Update LINE_ITEM_NO**************************************/
+TRUNCATE TABLE [dbo].[QmanControlPlanLineIndex]
+GO
+DECLARE @ID INT;
+DECLARE @CONTROL_PLAN_NO VARCHAR(20);
+
+DECLARE @CONTROL_PLAN_NO_AUX VARCHAR(20);
+DECLARE @DATA_POINT INT;
+DECLARE @TEST_OPERATION_NO INT;
+
+DECLARE main_curs 
+CURSOR FOR 
+SELECT ID, [CONTROL_PLAN_NO]
+FROM [QmanControlPlanLine] 
+ORDER BY [CONTROL_PLAN_NO]
+,[CTRL_PLAN_REVISION_NO]
+,[ROUTING_OPERATION_NO]
+,[TEST_OPERATION_NO];
+
+OPEN main_curs;
+FETCH NEXT FROM main_curs INTO @ID, @CONTROL_PLAN_NO;
+
+SET @DATA_POINT = 1;
+SET @TEST_OPERATION_NO = 10;
+
+while @@FETCH_STATUS = 0
+BEGIN
+INSERT INTO [dbo].[QmanControlPlanLineIndex]
+([ID]
+,[DATA_POINT]
+,[TEST_OPERATION_NO])
+VALUES
+( @ID
+, @DATA_POINT
+, @TEST_OPERATION_NO)
+
+SET @CONTROL_PLAN_NO_AUX = @CONTROL_PLAN_NO;
+    FETCH NEXT FROM main_curs INTO @ID, @CONTROL_PLAN_NO;
+IF @CONTROL_PLAN_NO_AUX <> @CONTROL_PLAN_NO 
+    begin
+        SET @DATA_POINT = 1;
+        SET @TEST_OPERATION_NO = 10;
+    end
+    ELSE
+    BEGIN
+        SET @DATA_POINT = @DATA_POINT + 1;    
+        SET @TEST_OPERATION_NO = @TEST_OPERATION_NO + 10;    
+    END;        
+END
+CLOSE main_curs;
+DEALLOCATE main_curs;
+GO
+---Update 
+UPDATE [QmanControlPlanLine]
+SET [DATA_POINT] = qmti.[DATA_POINT]
+,[TEST_OPERATION_NO] = qmti.[TEST_OPERATION_NO]
+FROM [QmanControlPlanLine] qmt
+INNER JOIN [QmanControlPlanLineIndex] qmti on qmti.ID = qmt.ID
+GO
